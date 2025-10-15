@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paragraph v5.9 - Animazioni Modali</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/docx/7.8.2/docx.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat&family=Lora:ital@0;1&family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:wght@700&family=Roboto:wght@400;700&family=Source+Code+Pro&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-primary: #ffffff; --bg-secondary: #f8fafc; --bg-tertiary: #e2e8f0;
+            --text-primary: #1e293b; --text-secondary: #64748b; --border-color: #e2e8f0;
+            --accent-color: #3b82f6; --accent-hover: #2563eb; --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1); --radius: 12px; --radius-sm: 8px;
+            --heart-color: #e74c3c;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0f172a; --bg-secondary: #1e293b; --bg-tertiary: #334155;
+            --text-primary: #f1f5f9; --text-secondary: #94a3b8; --border-color: #334155;
+            --accent-color: #60a5fa; --accent-hover: #3b82f6;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Montserrat', sans-serif; background: var(--bg-secondary);
+            color: var(--text-primary); height: 100vh; display: flex; flex-direction: column;
+        }
+        
+        /* LAYOUT PRINCIPALE */
+        .header, .toolbar, .status-bar { flex-shrink: 0; z-index: 10; }
+        .editor-container { flex: 1; overflow: auto; background: var(--bg-secondary); }
+        #zoomContainer { padding: 24px 0; transition: transform 0.2s ease; transform-origin: top center; }
+        
+        .page {
+            width: 210mm; min-height: 297mm; height: auto;
+            background: var(--bg-primary); box-shadow: var(--shadow-lg); 
+            padding: 0 2.5cm; 
+            margin: 0 auto; border-radius: var(--radius); display: flex; flex-direction: column;
+        }
+        .page.landscape { width: 297mm; min-height: 210mm; }
+
+        .editor {
+            flex-grow: 1; outline: none; font-size: 12pt; line-height: 1.6; color: var(--text-primary);
+            padding: 2.5cm 0;
+        }
+        
+        .editor h1 { font-size: 24pt; } .editor h2 { font-size: 18pt; } .editor h3 { font-size: 14pt; }
+        
+        body.focus-mode .header, body.focus-mode .toolbar, body.focus-mode .status-bar { display: none; }
+        body.focus-mode .editor-container { padding: 0; }
+        body.focus-mode #zoomContainer { padding: 0; }
+        body.focus-mode .page { box-shadow: none; border-radius: 0; min-height: 100vh; }
+        .focus-mode-toggle {
+            position: fixed; bottom: 20px; right: 20px; width: 50px; height: 50px; background: var(--accent-color);
+            color: white; border: none; border-radius: 50%; cursor: pointer; display: none; align-items: center;
+            justify-content: center; box-shadow: var(--shadow-lg); z-index: 1000;
+        }
+        body.focus-mode .focus-mode-toggle { display: flex; }
+        
+        .header { background: var(--bg-primary); border-bottom: 1px solid var(--border-color); padding: 16px 24px; box-shadow: var(--shadow); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+        .toolbar { background: var(--bg-primary); border-bottom: 1px solid var(--border-color); padding: 16px 20px; display: flex; flex-wrap: wrap; gap: 12px; box-shadow: var(--shadow); }
+        .toolbar-group { display: flex; gap: 6px; padding-right: 16px; border-right: 1px solid var(--border-color); align-items: center; }
+        .toolbar-group:last-child { border-right: none; }
+        .toolbar-group.right-aligned { margin-left: auto; padding-right: 0; border-right: none; }
+        .toolbar button, .file-menu button, .zoom-controls button { background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer; border-radius: var(--radius-sm); font-family: 'Montserrat', sans-serif; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+        .toolbar button { height: 40px; min-width: 40px; padding: 10px 14px; font-weight: 500; }
+        .toolbar button:hover { background: var(--bg-tertiary); transform: translateY(-1px); }
+        .toolbar button.active { background: var(--accent-color); border-color: var(--accent-color); color: white; }
+        .file-menu { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .file-menu button { padding: 8px 16px; font-size: 14px; font-weight: 500; gap: 8px; }
+        .file-menu button:hover { background: var(--accent-color); color: white; }
+        .toolbar select { height: 40px; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); }
+        .status-bar { background: var(--bg-primary); border-top: 1px solid var(--border-color); padding: 12px 20px; font-size: 13px; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .zoom-controls { display: flex; align-items: center; gap: 12px; }
+        .zoom-controls button { padding: 6px 12px; }
+        .zoom-controls span { min-width: 50px; text-align: center; }
+        .dropdown { position: relative; display: inline-block; }
+        .dropdown-toggle { gap: 8px; }
+        .dropdown-menu { position: absolute; top: 100%; left: 0; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); min-width: 200px; z-index: 1000; display: none; padding: 8px 0; }
+        .dropdown-menu.show { display: block; }
+        .dropdown-menu button { width: 100%; padding: 10px 16px; border: none; background: transparent; text-align: left; height: auto; min-width: auto; gap: 8px; }
+        .dropdown-menu button:hover { background: var(--bg-tertiary); }
+        .toast-container { position: fixed; bottom: 80px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 12px; }
+        .toast { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 16px 20px; box-shadow: var(--shadow-lg); min-width: 300px; display: flex; align-items: center; gap: 12px; }
+        .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 99999; justify-content: center; align-items: center;}
+        .loading-overlay.show { display: flex; }
+        .spinner { width: 50px; height: 50px; border: 4px solid var(--bg-tertiary); border-top: 4px solid var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* NUOVI STILI MODALI CON ANIMAZIONE */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5); z-index: 9999; backdrop-filter: blur(4px);
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.5s cubic-bezier(0.165, 0.84, 0.44, 1);
+        }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+        
+        .modal {
+            background: var(--bg-primary); border-radius: var(--radius); box-shadow: var(--shadow-lg);
+            max-width: 600px; width: 90%; max-height: 85vh; display: flex; flex-direction: column;
+        }
+
+        .modal-overlay.show .modal {
+            animation: blowUpModal 0.5s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+        }
+
+        .modal-overlay.is-closing .modal {
+            animation: blowUpModalTwo 0.5s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+        }
+
+        @keyframes blowUpModal {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes blowUpModalTwo {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        .modal.large { max-width: 90%; }
+        .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-secondary); }
+        .modal-body { padding: 24px; overflow-y: auto; }
+        .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; }
+        .modal-footer button { padding: 10px 20px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; border: 1px solid var(--border-color); }
+        .modal-footer button.btn-primary { background: var(--accent-color); color: white; border-color: var(--accent-color); }
+        .modal-footer button.btn-danger { background: var(--error-color); color: white; border-color: var(--error-color); }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 8px; }
+        .form-group input[type="text"], .form-group input[type="number"], .form-group input[type="url"] { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
+        
+        #infoModal .modal-body { text-align: center; }
+        #infoModal .icon { margin-bottom: 15px; color: var(--text-primary); }
+        #infoModal h2 { color: var(--text-primary); font-size: 2rem; margin-bottom: 10px; }
+        #infoModal p { color: var(--text-secondary); line-height: 1.6; }
+        #infoModal .signature { margin-top: 30px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.9rem; }
+        #infoModal .heart-icon { stroke: var(--heart-color); fill: var(--heart-color); }
+
+        .print-preview-container { background: var(--bg-secondary); padding: 20px; display: flex; flex-direction: column; gap: 24px; }
+        .print-preview-page { width: 210mm; height: 297mm; background: white; box-shadow: var(--shadow-lg); padding: 2.5cm; margin: 0 auto; border-radius: var(--radius); display: flex; flex-direction: column; overflow: hidden; color: black; }
+        .print-preview-page.landscape { width: 297mm; height: 210mm; }
+        .print-preview-page .editor { flex: 1; overflow: hidden; padding: 0; }
+        
+        @media print {
+            body * { visibility: hidden; }
+            #zoomContainer { transform: none !important; }
+            .print-preview-container, .print-preview-container * { visibility: visible; }
+            .print-preview-container { position: absolute; left: 0; top: 0; padding: 0; }
+            .print-preview-page { page-break-after: always; box-shadow: none; margin: 0; border-radius: 0; }
+        }
+    </style>
+</head>
+<body>
+    <button class="focus-mode-toggle" onclick="toggleFocusMode()"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="header">
+        <div class="file-menu">
+            <button onclick="newDocument()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg><span>Nuovo</span></button>
+            <div class="dropdown">
+                <button onclick="toggleSaveMenu()" class="dropdown-toggle file-menu-button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg><span>Salva</span></svg></button>
+                <div id="saveMenu" class="dropdown-menu">
+                    <button onclick="saveDocument('docx')">📘 Salva come DOCX</button>
+                    <button onclick="saveDocument('pdf')">📕 Salva come PDF</button>
+                    <button onclick="saveDocument('html')">📄 Salva come HTML</button>
+                    <button onclick="saveDocument('txt')">📝 Salva come TXT</button>
+                </div>
+            </div>
+            <button onclick="loadDocument()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg><span>Carica</span></button>
+            <button onclick="openFindReplace()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><span>Trova</span></button>
+            <button onclick="openPrintPreview()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>Anteprima</span></button>
+            <button onclick="toggleFocusMode()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg><span>Focus</span></button>
+        </div>
+    </div>
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <button onclick="togglePageOrientation()" title="Ruota pagina"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="m9 9 3 3-3 3"/></svg></button>
+        </div>
+        <div class="toolbar-group">
+            <select id="styleSelect" onchange="applyStyle()"><option value="p">Normale</option><option value="h1">Titolo 1</option><option value="h2">Titolo 2</option><option value="h3">Titolo 3</option></select>
+            <select id="fontFamily" onchange="changeFont()">
+                <option value="Montserrat, sans-serif">Montserrat</option>
+                <option value="Roboto, sans-serif">Roboto</option>
+                <option value="Lora, serif">Lora</option>
+                <option value="'Playfair Display', serif">Playfair Display</option>
+                <option value="'Source Code Pro', monospace">Source Code Pro</option>
+                <option value="Caveat, cursive">Caveat</option>
+                <option value="Arial, sans-serif">Arial</option>
+                <option value="'Times New Roman', serif">Times New Roman</option>
+            </select>
+        </div>
+        <div class="toolbar-group">
+            <button onclick="formatText('bold')" id="boldBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg></button>
+            <button onclick="formatText('italic')" id="italicBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg></button>
+            <button onclick="formatText('underline')" id="underlineBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg></button>
+            <button onclick="formatText('strikeThrough')" id="strikeBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" y1="12" x2="20" y2="12"/></svg></button>
+        </div>
+        <div class="toolbar-group">
+            <button onclick="formatText('insertUnorderedList')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+            <button onclick="formatText('insertOrderedList')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg></button>
+        </div>
+        <div class="toolbar-group right-aligned">
+            <button onclick="toggleTheme()" title="Cambia tema"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+            <button onclick="openInfoModal()" title="Informazioni"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+        </div>
+    </div>
+    <div class="editor-container">
+        <div id="zoomContainer">
+            <div class="page" id="mainPage">
+                <div class="editor" id="editor" contenteditable="true" oninput="handleInput()" onselectionchange="updateToolbar()" onkeydown="handleKeydown(event)"></div>
+            </div>
+        </div>
+    </div>
+    <div class="status-bar">
+        <div><span id="wordCount">Parole: 0</span> | <span id="charCount">Caratteri: 0</span> | <span id="pageFormat">A4 Verticale</span></div>
+        <div class="zoom-controls"><button onclick="zoomOut()">-</button><span id="zoomLevel">100%</span><button onclick="zoomIn()">+</button></div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+    <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
+    <input type="file" id="fileInput" onchange="handleFileLoad(event)" style="display:none">
+    <div class="modal-overlay" id="findReplaceModal"><div class="modal"><div class="modal-header"><h3>Trova e Sostituisci</h3><button class="modal-close" onclick="closeModal('findReplaceModal')">&times;</button></div><div class="modal-body"><div class="form-group"><label for="findText">Trova:</label><input type="text" id="findText"></div><div class="form-group"><label for="replaceText">Sostituisci con:</label><input type="text" id="replaceText"></div></div><div class="modal-footer"><button class="btn-secondary" onclick="closeModal('findReplaceModal')">Annulla</button><button onclick="replaceAll()" class="btn-primary">Sostituisci tutto</button></div></div></div>
+    <div class="modal-overlay" id="confirmModal"><div class="modal"><div class="modal-header"><h3 id="confirmTitle">Conferma</h3></div><div class="modal-body"><p id="confirmMessage"></p></div><div class="modal-footer"><button class="btn-secondary" onclick="closeModal('confirmModal')">Annulla</button><button id="confirmButton" onclick="confirmAction()" class="btn-danger">Conferma</button></div></div></div>
+    <div class="modal-overlay" id="printPreviewModal"><div class="modal large"><div class="modal-header"><h3>Anteprima di Stampa</h3><button class="modal-close" onclick="closeModal('printPreviewModal')">&times;</button></div><div class="modal-body" style="padding:0;"><div id="printPreviewContainer" class="print-preview-container"></div></div><div class="modal-footer"><button class="btn-secondary" onclick="closeModal('printPreviewModal')">Chiudi</button><button onclick="printFromPreview()" class="btn-primary">Stampa</button></div></div></div>
+    
+    <div class="modal-overlay" id="infoModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Informazioni</h3>
+                <button class="modal-close" onclick="closeModal('infoModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                <h2>Paragraph</h2>
+                <p>Un editor di testo minimalista e senza distrazioni, progettato per la scrittura focalizzata. Salva i tuoi documenti in vari formati e goditi un'esperienza fluida e pulita.</p>
+                <div class="signature">
+                    <span>Programmato con</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="heart-icon"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                    <span>da NeRO</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+<script src="paragraph.js"></script>
+</html>
